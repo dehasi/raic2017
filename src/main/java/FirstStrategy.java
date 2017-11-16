@@ -57,18 +57,21 @@ public final class FirstStrategy implements Strategy {
     public void move(Player me, World world, Game game, Move move) {
         initializeStrategy(world, game);
         initializeTick(me, world, game, move);
+        Vehicle vehicle = vehicleById.values().stream().findAny().get();
+        move.setVehicleId(vehicle.getId());
+        move.setX(vehicle.getX());
+        move.setY(vehicle.getY());
+        callNuclearStrike(vehicle.getId(), vehicle.getX(), vehicle.getY(), move);
 
-        if (me.getRemainingActionCooldownTicks() > 0) {
-            return;
-        }
 
-        if (executeDelayedMove()) {
-            return;
-        }
 
-        move();
+    }
 
-        executeDelayedMove();
+    private void callNuclearStrike(long vehicleId, double x, double y, Move move) {
+        move.setAction(ActionType.TACTICAL_NUCLEAR_STRIKE);
+        move.setVehicleId(vehicleId);
+        move.setX(x);
+        move.setY(y);
     }
 
     /**
@@ -114,136 +117,7 @@ public final class FirstStrategy implements Strategy {
         }
     }
 
-    /**
-     * Достаём отложенное действие из очереди и выполняем его.
-     *
-     * @return Возвращает {@code true}, если и только если отложенное действие было найдено и выполнено.
-     */
-    private boolean executeDelayedMove() {
-        Consumer<Move> delayedMove = delayedMoves.poll();
-        if (delayedMove == null) {
-            return false;
-        }
 
-        delayedMove.accept(move);
-        return true;
-    }
-
-    /**
-     * Основная логика нашей стратегии.
-     */
-    private void move() {
-        // Каждые 180 тиков ...
-        if (world.getTickIndex() % 180 == 0) {
-            // ... для каждого типа техники ...
-            for (VehicleType vehicleType : VehicleType.values()) {
-                VehicleType[] targetTypes = preferredTargetTypesByVehicleType.get(vehicleType);
-
-                // ... если этот тип может атаковать ...
-                if (targetTypes == null || targetTypes.length == 0) {
-                    continue;
-                }
-
-                // ... получаем центр формации ...
-                double x = streamVehicles(
-                        Ownership.ALLY, vehicleType
-                ).mapToDouble(Vehicle::getX).average().orElse(Double.NaN);
-
-                double y = streamVehicles(
-                        Ownership.ALLY, vehicleType
-                ).mapToDouble(Vehicle::getY).average().orElse(Double.NaN);
-
-                // ... получаем центр формации противника или центр мира ...
-                double targetX = Arrays.stream(targetTypes).map(
-                        targetType -> streamVehicles(
-                                Ownership.ENEMY, targetType
-                        ).mapToDouble(Vehicle::getX).average().orElse(Double.NaN)
-                ).filter(Double::isFinite).findFirst().orElseGet(
-                        () -> streamVehicles(
-                                Ownership.ENEMY
-                        ).mapToDouble(Vehicle::getX).average().orElse(world.getWidth() / 2.0D)
-                );
-
-                double targetY = Arrays.stream(targetTypes).map(
-                        targetType -> streamVehicles(
-                                Ownership.ENEMY, targetType
-                        ).mapToDouble(Vehicle::getY).average().orElse(Double.NaN)
-                ).filter(Double::isFinite).findFirst().orElseGet(
-                        () -> streamVehicles(
-                                Ownership.ENEMY
-                        ).mapToDouble(Vehicle::getY).average().orElse(world.getHeight() / 2.0D)
-                );
-
-                // .. и добавляем в очередь отложенные действия для выделения и перемещения техники.
-                if (!Double.isNaN(x) && !Double.isNaN(y)) {
-                    delayedMoves.add(move -> {
-                        move.setAction(ActionType.CLEAR_AND_SELECT);
-                        move.setRight(world.getWidth());
-                        move.setBottom(world.getHeight());
-                        move.setVehicleType(vehicleType);
-                    });
-
-                    delayedMoves.add(move -> {
-                        move.setAction(ActionType.MOVE);
-                        move.setX(targetX - x);
-                        move.setY(targetY - y);
-                    });
-                }
-            }
-
-            // Также находим центр формации наших БРЭМ ...
-            double x = streamVehicles(
-                    Ownership.ALLY, VehicleType.ARRV
-            ).mapToDouble(Vehicle::getX).average().orElse(Double.NaN);
-
-            double y = streamVehicles(
-                    Ownership.ALLY, VehicleType.ARRV
-            ).mapToDouble(Vehicle::getY).average().orElse(Double.NaN);
-
-            // .. и отправляем их в центр мира.
-            if (!Double.isNaN(x) && !Double.isNaN(y)) {
-                delayedMoves.add(move -> {
-                    move.setAction(ActionType.CLEAR_AND_SELECT);
-                    move.setRight(world.getWidth());
-                    move.setBottom(world.getHeight());
-                    move.setVehicleType(VehicleType.ARRV);
-                });
-
-                delayedMoves.add(move -> {
-                    move.setAction(ActionType.MOVE);
-                    move.setX(world.getWidth() / 2.0D - x);
-                    move.setY(world.getHeight() / 2.0D - y);
-                });
-            }
-
-            return;
-        }
-
-        // Если ни один наш юнит не мог двигаться в течение 60 тиков ...
-        if (streamVehicles(Ownership.ALLY).allMatch(
-                vehicle -> world.getTickIndex() - updateTickByVehicleId.get(vehicle.getId()) > 60
-        )) {
-            // ... находим центр нашей формации ...
-            double x = streamVehicles(Ownership.ALLY).mapToDouble(Vehicle::getX).average().orElse(Double.NaN);
-            double y = streamVehicles(Ownership.ALLY).mapToDouble(Vehicle::getY).average().orElse(Double.NaN);
-
-            // ... и поворачиваем её на случайный угол.
-            if (!Double.isNaN(x) && !Double.isNaN(y)) {
-                delayedMoves.add(move -> {
-                    move.setAction(ActionType.CLEAR_AND_SELECT);
-                    move.setRight(world.getWidth());
-                    move.setBottom(world.getHeight());
-                });
-
-                delayedMoves.add(move -> {
-                    move.setAction(ActionType.ROTATE);
-                    move.setX(x);
-                    move.setY(y);
-                    move.setAngle(random.nextBoolean() ? StrictMath.PI : -StrictMath.PI);
-                });
-            }
-        }
-    }
 
     private Stream<Vehicle> streamVehicles(Ownership ownership, VehicleType vehicleType) {
         Stream<Vehicle> stream = vehicleById.values().stream();
