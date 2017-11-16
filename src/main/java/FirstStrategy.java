@@ -14,19 +14,19 @@ public final class FirstStrategy implements Strategy {
     static {
         preferredTargetTypesByVehicleType = new EnumMap<>(VehicleType.class);
 
-        preferredTargetTypesByVehicleType.put(VehicleType.FIGHTER, new VehicleType[] {
+        preferredTargetTypesByVehicleType.put(VehicleType.FIGHTER, new VehicleType[]{
                 VehicleType.HELICOPTER, VehicleType.FIGHTER
         });
 
-        preferredTargetTypesByVehicleType.put(VehicleType.HELICOPTER, new VehicleType[] {
+        preferredTargetTypesByVehicleType.put(VehicleType.HELICOPTER, new VehicleType[]{
                 VehicleType.TANK, VehicleType.ARRV, VehicleType.HELICOPTER, VehicleType.IFV, VehicleType.FIGHTER
         });
 
-        preferredTargetTypesByVehicleType.put(VehicleType.IFV, new VehicleType[] {
+        preferredTargetTypesByVehicleType.put(VehicleType.IFV, new VehicleType[]{
                 VehicleType.HELICOPTER, VehicleType.ARRV, VehicleType.IFV, VehicleType.FIGHTER, VehicleType.TANK
         });
 
-        preferredTargetTypesByVehicleType.put(VehicleType.TANK, new VehicleType[] {
+        preferredTargetTypesByVehicleType.put(VehicleType.TANK, new VehicleType[]{
                 VehicleType.IFV, VehicleType.ARRV, VehicleType.TANK, VehicleType.FIGHTER, VehicleType.HELICOPTER
         });
     }
@@ -57,14 +57,54 @@ public final class FirstStrategy implements Strategy {
     public void move(Player me, World world, Game game, Move move) {
         initializeStrategy(world, game);
         initializeTick(me, world, game, move);
-        Vehicle vehicle = vehicleById.values().stream().findAny().get();
-        move.setVehicleId(vehicle.getId());
-        move.setX(vehicle.getX());
-        move.setY(vehicle.getY());
-        callNuclearStrike(vehicle.getId(), vehicle.getX(), vehicle.getY(), move);
 
+        if (world.getTickIndex() == 0){
+            move();
+            return;
+        }
 
+        if (me.getRemainingActionCooldownTicks() > 0) {
+            return;
+        }
 
+        if (executeDelayedMove()) {
+            return;
+        }
+
+        executeDelayedMove();
+    }
+
+    private void move() {
+        delayedMoves.add(move -> {           selectAll(move, VehicleType.HELICOPTER);        });
+        delayedMoves.add(move -> {            shiftVehicle(move, world.getWidth() / 2.0D, world.getHeight() / 2.0D);        });
+        delayedMoves.add(move -> {           selectAll(move, VehicleType.FIGHTER);        });
+        delayedMoves.add(move -> {            shiftVehicle(move, world.getWidth() / 2.0D, world.getHeight() / 2.0D);        });
+        delayedMoves.add(move -> {            selectAll(move, VehicleType.TANK);        });
+        delayedMoves.add(move -> {            shiftVehicle(move, 0.0d, world.getHeight() / 2.0D);        });
+        delayedMoves.add(move -> {            selectAll(move, VehicleType.ARRV);        });
+        delayedMoves.add(move -> {            shiftVehicle(move, 0.0d, world.getHeight() / 2.0D);        });
+        delayedMoves.add(move -> {            selectAll(move, VehicleType.IFV);        });
+        delayedMoves.add(move -> {            shiftVehicle(move, world.getWidth() / 2.0D, .0D);        });
+        delayedMoves.add(move -> {        });
+    }
+
+    private void shiftVehicle(Move move, double x, double y){
+        move.setAction(ActionType.MOVE);
+        move.setX(x);
+        move.setY(y);
+    }
+    private void selectAll(Move move, VehicleType vehicleType) {
+        move.setAction(ActionType.CLEAR_AND_SELECT);
+        move.setVehicleType(vehicleType);
+        move.setRight(world.getWidth());
+        move.setBottom(world.getHeight());
+    }
+    private boolean executeDelayedMove() {
+        Consumer<Move> action = delayedMoves.poll();
+        if (action == null) return false;
+
+        action.accept(move);
+        return true;
     }
 
     private void callNuclearStrike(long vehicleId, double x, double y, Move move) {
@@ -116,7 +156,6 @@ public final class FirstStrategy implements Strategy {
             }
         }
     }
-
 
 
     private Stream<Vehicle> streamVehicles(Ownership ownership, VehicleType vehicleType) {
