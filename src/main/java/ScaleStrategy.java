@@ -1,20 +1,6 @@
-import model.ActionType;
-import model.Game;
-import model.Move;
-import model.Player;
-import model.TerrainType;
-import model.Vehicle;
-import model.VehicleType;
-import model.VehicleUpdate;
-import model.WeatherType;
-import model.World;
+import model.*;
 
-import java.util.ArrayDeque;
-import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Queue;
-import java.util.Random;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -104,15 +90,10 @@ public final class ScaleStrategy implements Strategy {
     }
 
     private void move() {
-        delayedMoves.add(move -> {
-            selectAll(move, VehicleType.FIGHTER);
-        });
-//        delayedMoves.add(move -> {            scaleVehicle(move, centerX/2.0d, centerY/2.0d, 4.0d);        });
-        delayedMoves.add(move -> {
-            scaleVehicle(move, 0, 0, 4);
-        });
-//        delayedMoves.add(move -> {           selectAll(move, VehicleType.FIGHTER);        });
-//        delayedMoves.add(move -> {            shiftVehicle(move, world.getWidth() / 2.0D, world.getHeight() / 2.0D);        });
+        delayedMoves.add(move -> selectAll(move, VehicleType.FIGHTER));
+        delayedMoves.add(move -> scaleVehicle(move, 0, 0, 4));
+        delayedMoves.add(move -> selectAll(move, VehicleType.HELICOPTER));
+        delayedMoves.add(move -> rotateVehicle(move, 0, centerY));
 //        delayedMoves.add(move -> {            selectAll(move, VehicleType.TANK);        });
 //        delayedMoves.add(move -> {            shiftVehicle(move, 0.0d, world.getHeight() / 2.0D);        });
 //        delayedMoves.add(move -> {            selectAll(move, VehicleType.ARRV);        });
@@ -120,6 +101,13 @@ public final class ScaleStrategy implements Strategy {
 //        delayedMoves.add(move -> {            selectAll(move, VehicleType.IFV);        });
 //        delayedMoves.add(move -> {            shiftVehicle(move, world.getWidth() / 2.0D, .0D);        });
 //        delayedMoves.add(move -> {        });
+    }
+
+    private void rotateVehicle(Move move, double x, double y) {
+        move.setAction(ActionType.ROTATE);
+        move.setX(x);
+        move.setY(y);
+        move.setAngle(Math.PI);
     }
 
     private void scaleVehicle(Move move, double x, double y, double factor) {
