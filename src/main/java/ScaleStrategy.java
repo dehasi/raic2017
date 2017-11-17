@@ -61,6 +61,7 @@ public final class ScaleStrategy implements Strategy {
     private final Map<Long, Vehicle> vehicleById = new HashMap<>();
     private final Map<Long, Integer> updateTickByVehicleId = new HashMap<>();
     private final Queue<Consumer<Move>> delayedMoves = new ArrayDeque<>();
+    private final Map<Vehicle, Square> initialSquares = new HashMap<>();
 
     /**
      * Основной метод стратегии, осуществляющий управление армией. Вызывается каждый тик.
@@ -74,8 +75,9 @@ public final class ScaleStrategy implements Strategy {
     public void move(Player me, World world, Game game, Move move) {
         initializeStrategy(world, game);
         initializeTick(me, world, game, move);
+        findUnitsPosition(world);
 
-        if (world.getTickIndex() == 0){
+        if (world.getTickIndex() == 0) {
             move();
             return;
         }
@@ -91,9 +93,18 @@ public final class ScaleStrategy implements Strategy {
         executeDelayedMove();
     }
 
+    private void findUnitsPosition(World world) {
+        world.getFacilities();
+    }
+
     private void move() {
-        delayedMoves.add(move -> {           selectAll(move, VehicleType.HELICOPTER);        });
-        delayedMoves.add(move -> {            scaleVehicle(move, centerX/2.0d, centerY/2.0d, 4.0d);        });
+        delayedMoves.add(move -> {
+            selectAll(move, VehicleType.FIGHTER);
+        });
+//        delayedMoves.add(move -> {            scaleVehicle(move, centerX/2.0d, centerY/2.0d, 4.0d);        });
+        delayedMoves.add(move -> {
+            scaleVehicle(move, 0, -centerY  , 5.0d);
+        });
 //        delayedMoves.add(move -> {           selectAll(move, VehicleType.FIGHTER);        });
 //        delayedMoves.add(move -> {            shiftVehicle(move, world.getWidth() / 2.0D, world.getHeight() / 2.0D);        });
 //        delayedMoves.add(move -> {            selectAll(move, VehicleType.TANK);        });
@@ -106,23 +117,25 @@ public final class ScaleStrategy implements Strategy {
     }
 
     private void scaleVehicle(Move move, double x, double y, double factor) {
-        move.setAction(ActionType.MOVE);
+        move.setAction(ActionType.SCALE);
         move.setX(x);
         move.setY(y);
         move.setFactor(factor);
     }
 
-    private void shiftVehicle(Move move, double x, double y){
+    private void shiftVehicle(Move move, double x, double y) {
         move.setAction(ActionType.MOVE);
         move.setX(x);
         move.setY(y);
     }
+
     private void selectAll(Move move, VehicleType vehicleType) {
         move.setAction(ActionType.CLEAR_AND_SELECT);
         move.setVehicleType(vehicleType);
         move.setRight(world.getWidth());
         move.setBottom(world.getHeight());
     }
+
     private boolean executeDelayedMove() {
         Consumer<Move> action = delayedMoves.poll();
         if (action == null) return false;
@@ -218,5 +231,21 @@ public final class ScaleStrategy implements Strategy {
         ALLY,
 
         ENEMY
+    }
+
+}
+
+class Square {
+    double topX, topY, bottomX, bottomY;
+    public static final Square def = new Square(Double.MAX_VALUE, Double.MAX_VALUE, Double.MIN_VALUE, Double.MIN_VALUE);
+
+    public Square() {
+    }
+
+    public Square(double topX, double topY, double bottomX, double bottomY) {
+        this.topX = topX;
+        this.topY = topY;
+        this.bottomX = bottomX;
+        this.bottomY = bottomY;
     }
 }
