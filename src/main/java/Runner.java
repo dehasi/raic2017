@@ -24,7 +24,8 @@ public final class Runner {
             Game game = remoteProcessClient.readGameContextMessage();
 
 //            Strategy strategy = new MyStrategy();
-            Strategy strategy = new FirstStrategy();
+//            Strategy strategy = new FirstStrategy();
+            Strategy strategy = new ScaleStrategy();
 
             PlayerContext playerContext;
 

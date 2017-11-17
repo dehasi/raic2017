@@ -1,6 +1,20 @@
-import model.*;
+import model.ActionType;
+import model.Game;
+import model.Move;
+import model.Player;
+import model.TerrainType;
+import model.Vehicle;
+import model.VehicleType;
+import model.VehicleUpdate;
+import model.WeatherType;
+import model.World;
 
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Random;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -14,19 +28,19 @@ public final class ScaleStrategy implements Strategy {
     static {
         preferredTargetTypesByVehicleType = new EnumMap<>(VehicleType.class);
 
-        preferredTargetTypesByVehicleType.put(VehicleType.FIGHTER, new VehicleType[] {
+        preferredTargetTypesByVehicleType.put(VehicleType.FIGHTER, new VehicleType[]{
                 VehicleType.HELICOPTER, VehicleType.FIGHTER
         });
 
-        preferredTargetTypesByVehicleType.put(VehicleType.HELICOPTER, new VehicleType[] {
+        preferredTargetTypesByVehicleType.put(VehicleType.HELICOPTER, new VehicleType[]{
                 VehicleType.TANK, VehicleType.ARRV, VehicleType.HELICOPTER, VehicleType.IFV, VehicleType.FIGHTER
         });
 
-        preferredTargetTypesByVehicleType.put(VehicleType.IFV, new VehicleType[] {
+        preferredTargetTypesByVehicleType.put(VehicleType.IFV, new VehicleType[]{
                 VehicleType.HELICOPTER, VehicleType.ARRV, VehicleType.IFV, VehicleType.FIGHTER, VehicleType.TANK
         });
 
-        preferredTargetTypesByVehicleType.put(VehicleType.TANK, new VehicleType[] {
+        preferredTargetTypesByVehicleType.put(VehicleType.TANK, new VehicleType[]{
                 VehicleType.IFV, VehicleType.ARRV, VehicleType.TANK, VehicleType.FIGHTER, VehicleType.HELICOPTER
         });
     }
@@ -40,6 +54,9 @@ public final class ScaleStrategy implements Strategy {
     private World world;
     private Game game;
     private Move move;
+
+    private double centerX;
+    private double centerY;
 
     private final Map<Long, Vehicle> vehicleById = new HashMap<>();
     private final Map<Long, Integer> updateTickByVehicleId = new HashMap<>();
@@ -58,6 +75,11 @@ public final class ScaleStrategy implements Strategy {
         initializeStrategy(world, game);
         initializeTick(me, world, game, move);
 
+        if (world.getTickIndex() == 0){
+            move();
+            return;
+        }
+
         if (me.getRemainingActionCooldownTicks() > 0) {
             return;
         }
@@ -66,9 +88,54 @@ public final class ScaleStrategy implements Strategy {
             return;
         }
 
-        move();
-
         executeDelayedMove();
+    }
+
+    private void move() {
+        delayedMoves.add(move -> {           selectAll(move, VehicleType.HELICOPTER);        });
+        delayedMoves.add(move -> {            scaleVehicle(move, centerX/2.0d, centerY/2.0d, 4.0d);        });
+//        delayedMoves.add(move -> {           selectAll(move, VehicleType.FIGHTER);        });
+//        delayedMoves.add(move -> {            shiftVehicle(move, world.getWidth() / 2.0D, world.getHeight() / 2.0D);        });
+//        delayedMoves.add(move -> {            selectAll(move, VehicleType.TANK);        });
+//        delayedMoves.add(move -> {            shiftVehicle(move, 0.0d, world.getHeight() / 2.0D);        });
+//        delayedMoves.add(move -> {            selectAll(move, VehicleType.ARRV);        });
+//        delayedMoves.add(move -> {            shiftVehicle(move, 0.0d, world.getHeight() / 2.0D);        });
+//        delayedMoves.add(move -> {            selectAll(move, VehicleType.IFV);        });
+//        delayedMoves.add(move -> {            shiftVehicle(move, world.getWidth() / 2.0D, .0D);        });
+//        delayedMoves.add(move -> {        });
+    }
+
+    private void scaleVehicle(Move move, double x, double y, double factor) {
+        move.setAction(ActionType.MOVE);
+        move.setX(x);
+        move.setY(y);
+        move.setFactor(factor);
+    }
+
+    private void shiftVehicle(Move move, double x, double y){
+        move.setAction(ActionType.MOVE);
+        move.setX(x);
+        move.setY(y);
+    }
+    private void selectAll(Move move, VehicleType vehicleType) {
+        move.setAction(ActionType.CLEAR_AND_SELECT);
+        move.setVehicleType(vehicleType);
+        move.setRight(world.getWidth());
+        move.setBottom(world.getHeight());
+    }
+    private boolean executeDelayedMove() {
+        Consumer<Move> action = delayedMoves.poll();
+        if (action == null) return false;
+
+        action.accept(move);
+        return true;
+    }
+
+    private void callNuclearStrike(long vehicleId, double x, double y, Move move) {
+        move.setAction(ActionType.TACTICAL_NUCLEAR_STRIKE);
+        move.setVehicleId(vehicleId);
+        move.setX(x);
+        move.setY(y);
     }
 
     /**
@@ -112,138 +179,10 @@ public final class ScaleStrategy implements Strategy {
                 updateTickByVehicleId.put(vehicleId, world.getTickIndex());
             }
         }
+        this.centerX = world.getWidth() / 2.0d;
+        this.centerY = world.getHeight() / 2.0d;
     }
 
-    /**
-     * Достаём отложенное действие из очереди и выполняем его.
-     *
-     * @return Возвращает {@code true}, если и только если отложенное действие было найдено и выполнено.
-     */
-    private boolean executeDelayedMove() {
-        Consumer<Move> delayedMove = delayedMoves.poll();
-        if (delayedMove == null) {
-            return false;
-        }
-
-        delayedMove.accept(move);
-        return true;
-    }
-
-    /**
-     * Основная логика нашей стратегии.
-     */
-    private void move() {
-        // Каждые 180 тиков ...
-        if (world.getTickIndex() % 180 == 0) {
-            // ... для каждого типа техники ...
-            for (VehicleType vehicleType : VehicleType.values()) {
-                VehicleType[] targetTypes = preferredTargetTypesByVehicleType.get(vehicleType);
-
-                // ... если этот тип может атаковать ...
-                if (targetTypes == null || targetTypes.length == 0) {
-                    continue;
-                }
-
-                // ... получаем центр формации ...
-                double x = streamVehicles(
-                        Ownership.ALLY, vehicleType
-                ).mapToDouble(Vehicle::getX).average().orElse(Double.NaN);
-
-                double y = streamVehicles(
-                        Ownership.ALLY, vehicleType
-                ).mapToDouble(Vehicle::getY).average().orElse(Double.NaN);
-
-                // ... получаем центр формации противника или центр мира ...
-                double targetX = Arrays.stream(targetTypes).map(
-                        targetType -> streamVehicles(
-                                Ownership.ENEMY, targetType
-                        ).mapToDouble(Vehicle::getX).average().orElse(Double.NaN)
-                ).filter(Double::isFinite).findFirst().orElseGet(
-                        () -> streamVehicles(
-                                Ownership.ENEMY
-                        ).mapToDouble(Vehicle::getX).average().orElse(world.getWidth() / 2.0D)
-                );
-
-                double targetY = Arrays.stream(targetTypes).map(
-                        targetType -> streamVehicles(
-                                Ownership.ENEMY, targetType
-                        ).mapToDouble(Vehicle::getY).average().orElse(Double.NaN)
-                ).filter(Double::isFinite).findFirst().orElseGet(
-                        () -> streamVehicles(
-                                Ownership.ENEMY
-                        ).mapToDouble(Vehicle::getY).average().orElse(world.getHeight() / 2.0D)
-                );
-
-                // .. и добавляем в очередь отложенные действия для выделения и перемещения техники.
-                if (!Double.isNaN(x) && !Double.isNaN(y)) {
-                    delayedMoves.add(move -> {
-                        move.setAction(ActionType.CLEAR_AND_SELECT);
-                        move.setRight(world.getWidth());
-                        move.setBottom(world.getHeight());
-                        move.setVehicleType(vehicleType);
-                    });
-
-                    delayedMoves.add(move -> {
-                        move.setAction(ActionType.MOVE);
-                        move.setX(targetX - x);
-                        move.setY(targetY - y);
-                    });
-                }
-            }
-
-            // Также находим центр формации наших БРЭМ ...
-            double x = streamVehicles(
-                    Ownership.ALLY, VehicleType.ARRV
-            ).mapToDouble(Vehicle::getX).average().orElse(Double.NaN);
-
-            double y = streamVehicles(
-                    Ownership.ALLY, VehicleType.ARRV
-            ).mapToDouble(Vehicle::getY).average().orElse(Double.NaN);
-
-            // .. и отправляем их в центр мира.
-            if (!Double.isNaN(x) && !Double.isNaN(y)) {
-                delayedMoves.add(move -> {
-                    move.setAction(ActionType.CLEAR_AND_SELECT);
-                    move.setRight(world.getWidth());
-                    move.setBottom(world.getHeight());
-                    move.setVehicleType(VehicleType.ARRV);
-                });
-
-                delayedMoves.add(move -> {
-                    move.setAction(ActionType.MOVE);
-                    move.setX(world.getWidth() / 2.0D - x);
-                    move.setY(world.getHeight() / 2.0D - y);
-                });
-            }
-
-            return;
-        }
-
-        // Если ни один наш юнит не мог двигаться в течение 60 тиков ...
-        if (streamVehicles(Ownership.ALLY).allMatch(
-                vehicle -> world.getTickIndex() - updateTickByVehicleId.get(vehicle.getId()) > 60
-        )) {
-            // ... находим центр нашей формации ...
-            double x = streamVehicles(Ownership.ALLY).mapToDouble(Vehicle::getX).average().orElse(Double.NaN);
-            double y = streamVehicles(Ownership.ALLY).mapToDouble(Vehicle::getY).average().orElse(Double.NaN);
-
-            // ... и поворачиваем её на случайный угол.
-            if (!Double.isNaN(x) && !Double.isNaN(y)) {
-                delayedMoves.add(move -> {
-                    move.setAction(ActionType.CLEAR_AND_SELECT);
-                    move.setRight(world.getWidth());
-                    move.setBottom(world.getHeight());
-                });
-
-                delayedMoves.add(move -> {
-                    move.setAction(ActionType.ROTATE);
-                    move.setX(x);
-                    move.setY(y);
-                    move.setAngle(random.nextBoolean() ? StrictMath.PI : -StrictMath.PI);
-                });
-            }
-        }
-    }
 
     private Stream<Vehicle> streamVehicles(Ownership ownership, VehicleType vehicleType) {
         Stream<Vehicle> stream = vehicleById.values().stream();
