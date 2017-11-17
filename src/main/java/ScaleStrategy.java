@@ -1,21 +1,6 @@
-import model.ActionType;
-import model.Game;
-import model.Move;
-import model.Player;
-import model.TerrainType;
-import model.Vehicle;
-import model.VehicleType;
-import model.VehicleUpdate;
-import model.WeatherType;
-import model.World;
+import model.*;
 
-import java.util.ArrayDeque;
-import java.util.Arrays;
-import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Queue;
-import java.util.Random;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
