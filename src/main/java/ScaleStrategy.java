@@ -58,6 +58,9 @@ public final class ScaleStrategy implements Strategy {
     private double centerX;
     private double centerY;
 
+    private double scaleCenterX;
+    private double scaleCenterY;
+
     private final Map<Long, Vehicle> vehicleById = new HashMap<>();
     private final Map<Long, Integer> updateTickByVehicleId = new HashMap<>();
     private final Queue<Consumer<Move>> delayedMoves = new ArrayDeque<>();
@@ -95,6 +98,9 @@ public final class ScaleStrategy implements Strategy {
 
     private void findUnitsPosition(World world) {
         world.getFacilities();
+        vehicleById.values().stream()
+                .filter(vehicle -> vehicle.getPlayerId() == me.getId())
+                .filter(vehicle -> vehicle.getType() == VehicleType.FIGHTER);
     }
 
     private void move() {
@@ -103,7 +109,7 @@ public final class ScaleStrategy implements Strategy {
         });
 //        delayedMoves.add(move -> {            scaleVehicle(move, centerX/2.0d, centerY/2.0d, 4.0d);        });
         delayedMoves.add(move -> {
-            scaleVehicle(move, 0, -centerY  , 5.0d);
+            scaleVehicle(move, 0, 0, 4);
         });
 //        delayedMoves.add(move -> {           selectAll(move, VehicleType.FIGHTER);        });
 //        delayedMoves.add(move -> {            shiftVehicle(move, world.getWidth() / 2.0D, world.getHeight() / 2.0D);        });
@@ -194,6 +200,8 @@ public final class ScaleStrategy implements Strategy {
         }
         this.centerX = world.getWidth() / 2.0d;
         this.centerY = world.getHeight() / 2.0d;
+        this.scaleCenterX = world.getWidth() * 1.5d;
+        this.scaleCenterY = world.getHeight() * 1.5d;
     }
 
 
