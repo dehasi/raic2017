@@ -4,6 +4,8 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
+import static java.util.stream.Collectors.toList;
+
 @SuppressWarnings({"UnsecureRandomNumberGeneration", "FieldCanBeLocal", "unused", "OverlyLongMethod"})
 public final class ScaleStrategy implements Strategy {
     /**
@@ -84,9 +86,29 @@ public final class ScaleStrategy implements Strategy {
 
     private void findUnitsPosition(World world) {
         world.getFacilities();
-        vehicleById.values().stream()
+        List<Point> fighterPoints = vehicleById.values().stream()
                 .filter(vehicle -> vehicle.getPlayerId() == me.getId())
-                .filter(vehicle -> vehicle.getType() == VehicleType.FIGHTER);
+                .filter(vehicle -> vehicle.getType() == VehicleType.FIGHTER)
+                .map(v -> new Point(v.getX(), v.getY()))
+                .collect(toList());
+
+        Square fightersSquare = new Square(Double.MAX_VALUE, Double.MAX_VALUE, Double.MIN_VALUE, Double.MIN_VALUE);
+        for (Point p : fighterPoints) {
+            if (p.x < fightersSquare.topX) {
+                fightersSquare.topX = p.x;
+            }
+            if (p.y < fightersSquare.topY) {
+                fightersSquare.topY = p.y;
+            }
+
+            if (p.x > fightersSquare.bottomX) {
+                fightersSquare.bottomX = p.x;
+            }
+            if (p.y > fightersSquare.bottomY) {
+                fightersSquare.bottomY = p.y;
+            }
+        }
+
     }
 
     private void move() {
@@ -243,5 +265,17 @@ class Square {
         this.topY = topY;
         this.bottomX = bottomX;
         this.bottomY = bottomY;
+    }
+}
+
+class Point {
+    double x, y;
+
+    public Point() {
+    }
+
+    public Point(double x, double y) {
+        this.x = x;
+        this.y = y;
     }
 }
