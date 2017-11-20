@@ -92,23 +92,28 @@ public final class ScaleStrategy implements Strategy {
                 .map(v -> new Point(v.getX(), v.getY()))
                 .collect(toList());
 
-        Square fightersSquare = new Square(Double.MAX_VALUE, Double.MAX_VALUE, Double.MIN_VALUE, Double.MIN_VALUE);
-        for (Point p : fighterPoints) {
-            if (p.x < fightersSquare.topX) {
-                fightersSquare.topX = p.x;
+        Square fightersSquare = getUnitsSquare(fighterPoints);
+
+    }
+
+    private Square getUnitsSquare(List<Point> points) {
+        Square square = new Square(Double.MAX_VALUE, Double.MAX_VALUE, Double.MIN_VALUE, Double.MIN_VALUE);
+        for (Point p : points) {
+            if (p.x < square.topX) {
+                square.topX = p.x;
             }
-            if (p.y < fightersSquare.topY) {
-                fightersSquare.topY = p.y;
+            if (p.y < square.topY) {
+                square.topY = p.y;
             }
 
-            if (p.x > fightersSquare.bottomX) {
-                fightersSquare.bottomX = p.x;
+            if (p.x > square.bottomX) {
+                square.bottomX = p.x;
             }
-            if (p.y > fightersSquare.bottomY) {
-                fightersSquare.bottomY = p.y;
+            if (p.y > square.bottomY) {
+                square.bottomY = p.y;
             }
         }
-
+        return square;
     }
 
     private void move() {
