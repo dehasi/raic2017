@@ -196,12 +196,6 @@ public final class ScaleStrategy implements Strategy {
         return true;
     }
 
-    private void callNuclearStrike(long vehicleId, double x, double y, Move move) {
-        move.setAction(ActionType.TACTICAL_NUCLEAR_STRIKE);
-        move.setVehicleId(vehicleId);
-        move.setX(x);
-        move.setY(y);
-    }
 
     /**
      * Инциализируем стратегию.
@@ -216,6 +210,10 @@ public final class ScaleStrategy implements Strategy {
             terrainTypeByCellXY = world.getTerrainByCellXY();
             weatherTypeByCellXY = world.getWeatherByCellXY();
         }
+        this.centerX = world.getWidth() / 2.0d;
+        this.centerY = world.getHeight() / 2.0d;
+        this.oneThirdX = world.getWidth() / 3.0d;
+        this.oneThirdY = world.getHeight() / 3.0d;
     }
 
     /**
@@ -244,10 +242,7 @@ public final class ScaleStrategy implements Strategy {
                 updateTickByVehicleId.put(vehicleId, world.getTickIndex());
             }
         }
-        this.centerX = world.getWidth() / 2.0d;
-        this.centerY = world.getHeight() / 2.0d;
-        this.oneThirdX = world.getWidth() / 3.0d;
-        this.oneThirdY = world.getHeight() / 3.0d;
+
     }
 
     private Point findEnemyVehicleFormation(VehicleType[] targetTypes) {
@@ -427,6 +422,13 @@ final class MoveHelper {
     void selectGroup(Move move, int group) {
         move.setAction(ActionType.CLEAR_AND_SELECT);
         move.setGroup(group);
+    }
+
+    void callNuclearStrike(Move move, long vehicleId, double x, double y) {
+        move.setAction(ActionType.TACTICAL_NUCLEAR_STRIKE);
+        move.setVehicleId(vehicleId);
+        move.setX(x);
+        move.setY(y);
     }
 
 }
