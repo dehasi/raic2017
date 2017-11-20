@@ -62,8 +62,8 @@ public final class ScaleStrategy implements Strategy {
     private double centerX;
     private double centerY;
 
-    private double scaleCenterX;
-    private double scaleCenterY;
+    private double oneThirdX;
+    private double oneThirdY;
 
 
     private Rectangle fightersRectangle;
@@ -90,7 +90,7 @@ public final class ScaleStrategy implements Strategy {
         initializeStrategy(world, game);
         initializeTick(me, world, game, move);
         findUnitsPosition(world);
-
+        startAttack();
         if (world.getTickIndex() == 0) {
             move();
             return;
@@ -107,6 +107,17 @@ public final class ScaleStrategy implements Strategy {
         executeDelayedMove();
     }
 
+    private void startAttack() {
+        List<Rectangle> rectangles = Stream.of(fightersRectangle, helicoptersRectangle, ifvRectangle, tanksRectangle, arrvsRectangle).sorted(Rectangle::compareTo).collect(toList());
+
+        for (Rectangle rec : rectangles) {
+            switch (rec.type) {
+                case FIGHTER:
+            }
+        }
+
+    }
+
     private void findUnitsPosition(World world) {
         if (fightersRectangle != null) return;
         fightersRectangle = getUnitsSquare(streamVehicles(Ownership.ALLY, VehicleType.FIGHTER));
@@ -118,9 +129,10 @@ public final class ScaleStrategy implements Strategy {
     }
 
     private Rectangle getUnitsSquare(Stream<Vehicle> vehicles) {
-        List<Point> points = vehicles.map(v -> new Point(v.getX(), v.getY()))
-                .collect(toList());
         Rectangle rectangle = new Rectangle(Double.MAX_VALUE, Double.MAX_VALUE, Double.MIN_VALUE, Double.MIN_VALUE);
+        List<Point> points = vehicles.peek(v -> rectangle.type = v.getType())
+                .map(v -> new Point(v.getX(), v.getY()))
+                .collect(toList());
         for (Point p : points) {
             if (p.x < rectangle.left) {
                 rectangle.left = p.x;
@@ -139,15 +151,18 @@ public final class ScaleStrategy implements Strategy {
         return rectangle;
     }
 
+    /**
+     * THE MAIN MOVEMENT LOGIC
+     */
     private void move() {
 //        delayedMoves.add(move -> selectAll(move, VehicleType.FIGHTER));
 //        delayedMoves.add(move -> scaleVehicle(move, 0, 0, 4));
 //        delayedMoves.add(move -> selectAll(move, VehicleType.HELICOPTER));
 //        delayedMoves.add(move -> rotateVehicle(move, 0, centerY));
 
-        delayedMoves.add(move -> selectRectangle(move, tanksRectangle));
-        delayedMoves.add(move -> shiftVehicle(move, 0.0d, world.getHeight() / 2.0D));
-//        delayedMoves.add(move -> {            selectAll(move, VehicleType.ARRV);        });
+        delayedMoves.add(move -> {
+            selectAll(move, VehicleType.ARRV);
+        });
 //        delayedMoves.add(move -> {            shiftVehicle(move, 0.0d, world.getHeight() / 2.0D);        });
 //        delayedMoves.add(move -> {            selectAll(move, VehicleType.IFV);        });
 //        delayedMoves.add(move -> {            shiftVehicle(move, world.getWidth() / 2.0D, .0D);        });
@@ -249,8 +264,8 @@ public final class ScaleStrategy implements Strategy {
         }
         this.centerX = world.getWidth() / 2.0d;
         this.centerY = world.getHeight() / 2.0d;
-        this.scaleCenterX = world.getWidth() * 1.5d;
-        this.scaleCenterY = world.getHeight() * 1.5d;
+        this.oneThirdX = world.getWidth() / 3.0d;
+        this.oneThirdY = world.getHeight() / 3.0d;
     }
 
     private Point findEnemyVehicleFormation(VehicleType[] targetTypes) {
@@ -305,6 +320,7 @@ public final class ScaleStrategy implements Strategy {
 }
 
 class Rectangle implements Comparable<Rectangle> {
+    VehicleType type;
     double left, top, right, bottom;
     public static final Rectangle def = new Rectangle(Double.MAX_VALUE, Double.MAX_VALUE, Double.MIN_VALUE, Double.MIN_VALUE);
 
@@ -321,7 +337,8 @@ class Rectangle implements Comparable<Rectangle> {
     @Override
     public String toString() {
         return "Rectangle{" +
-                "left=" + left +
+                "type=" + type +
+                ", left=" + left +
                 ", top=" + top +
                 ", right=" + right +
                 ", bottom=" + bottom +
