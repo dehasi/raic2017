@@ -9,7 +9,6 @@ import model.VehicleUpdate;
 import model.WeatherType;
 import model.World;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -29,6 +28,8 @@ public final class ScaleStrategy implements Strategy {
      * Список целей для каждого типа техники, упорядоченных по убыванию урона по ним.
      */
     private static final Map<VehicleType, VehicleType[]> preferredTargetTypesByVehicleType;
+    private static final int FRONT = 1;
+    private static final int BACK = 2;
 
     static {
         preferredTargetTypesByVehicleType = new EnumMap<>(VehicleType.class);
@@ -114,36 +115,24 @@ public final class ScaleStrategy implements Strategy {
     }
 
     private void startAttack() {
-        List<Rectangle> rectangles = Stream.of(fightersRectangle, helicoptersRectangle, ifvRectangle, tanksRectangle, arrvsRectangle).sorted(Rectangle::compareTo).collect(toList());
+//front
+        delayedMoves.add(new PriorityMove(m -> moveHelper.clearAndSelectRectangle(m, fightersRectangle)));
+        delayedMoves.add(new PriorityMove(m -> moveHelper.selectRectangle(m, rectangleHelper.verticalSplitLeft(arrvsRectangle))));
+        delayedMoves.add(new PriorityMove(m -> moveHelper.selectRectangle(m, rectangleHelper.verticalSplitLeft(ifvRectangle))));
+        delayedMoves.add(new PriorityMove(m -> moveHelper.creteGroup(m, FRONT)));
 
-        final List<Rectangle> frontAttack = new ArrayList<>(5);
-        final List<Rectangle> backAttack = new ArrayList<>(5);
-        for (Rectangle rec : rectangles) {
-            switch (rec.type) {
-                case FIGHTER:
-                    frontAttack.add(fightersRectangle);
-                    continue;
-                case ARRV:
-                case IFV:
-                    frontAttack.add(rectangleHelper.verticalSplitLeft(rec));
-                    backAttack.add(rectangleHelper.verticalSplitRight(rec));
-                    continue;
-                case HELICOPTER:
-                case TANK:
-                    backAttack.add(rec);
-                    continue;
-            }
-        }
+        delayedMoves.add(new PriorityMove(m -> moveHelper.selectGroup(m, FRONT)));
+        delayedMoves.add(new PriorityMove(m -> moveHelper.shiftVehicle(m, oneThirdX, oneThirdY)));
 
-        for (Rectangle rectangle : frontAttack) {
-            delayedMoves.add(new PriorityMove(0, m -> moveHelper.selectRectangle(m, rectangle)));
-            delayedMoves.add(new PriorityMove(0, m -> moveHelper.shiftVehicle(m, oneThirdX, oneThirdY)));
-        }
-//
-        for (Rectangle rectangle : backAttack) {
-            delayedMoves.add(new PriorityMove(0, m -> moveHelper.selectRectangle(m, rectangle)));
-            delayedMoves.add(new PriorityMove(0, m -> moveHelper.rotateVehicle(m, 0, world.getHeight())));
-        }
+//back
+        delayedMoves.add(new PriorityMove(m -> moveHelper.clearAndSelectRectangle(m, tanksRectangle)));
+        delayedMoves.add(new PriorityMove(m -> moveHelper.selectRectangle(m, helicoptersRectangle)));
+        delayedMoves.add(new PriorityMove(m -> moveHelper.selectRectangle(m, rectangleHelper.verticalSplitRight(arrvsRectangle))));
+        delayedMoves.add(new PriorityMove(m -> moveHelper.selectRectangle(m, rectangleHelper.verticalSplitRight(ifvRectangle))));
+        delayedMoves.add(new PriorityMove(m -> moveHelper.creteGroup(m, BACK)));
+
+        delayedMoves.add(new PriorityMove(m -> moveHelper.selectGroup(m, BACK)));
+        delayedMoves.add(new PriorityMove(m -> moveHelper.rotateVehicle(m, 0, 1.10D * centerY, Math.PI / 2.0D)));
 
 
     }
@@ -352,12 +341,16 @@ class Point {
 }
 
 class PriorityMove implements Comparable<PriorityMove> {
-    int priority;
+    int priority = 0;
     Consumer<Move> consumer;
 
     public PriorityMove(int priority, Consumer<Move> consumer) {
         this.consumer = consumer;
         this.priority = priority;
+    }
+
+    public PriorityMove(Consumer<Move> consumer) {
+        this.consumer = consumer;
     }
 
     @Override
@@ -368,7 +361,7 @@ class PriorityMove implements Comparable<PriorityMove> {
 
 final class RectangleHelper {
     Rectangle verticalSplitLeft(Rectangle r) {
-        Rectangle rectangle = new Rectangle(r.left, r.top, r.right / 2.0d, r.bottom);
+        Rectangle rectangle = new Rectangle(r.left, r.top, r.left + (r.right - r.left) / 2.0d, r.bottom);
         rectangle.type = r.type;
         return rectangle;
     }
@@ -382,11 +375,11 @@ final class RectangleHelper {
 }
 
 final class MoveHelper {
-    void rotateVehicle(Move move, double x, double y) {
+    void rotateVehicle(Move move, double x, double y, double angle) {
         move.setAction(ActionType.ROTATE);
         move.setX(x);
         move.setY(y);
-        move.setAngle(Math.PI/2.0D);
+        move.setAngle(angle);
     }
 
     void scaleVehicle(Move move, double x, double y, double factor) {
@@ -424,7 +417,16 @@ final class MoveHelper {
         move.setTop(rectangle.top);
         move.setRight(rectangle.right);
         move.setBottom(rectangle.bottom);
+    }
 
+    void creteGroup(Move move, int group) {
+        move.setAction(ActionType.ASSIGN);
+        move.setGroup(group);
+    }
+
+    void selectGroup(Move move, int group) {
+        move.setAction(ActionType.CLEAR_AND_SELECT);
+        move.setGroup(group);
     }
 
 }
