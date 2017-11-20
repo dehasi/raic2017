@@ -10,6 +10,7 @@ import model.WeatherType;
 import model.World;
 
 import java.util.ArrayDeque;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
@@ -107,11 +108,13 @@ public final class ScaleStrategy implements Strategy {
     }
 
     private void findUnitsPosition(World world) {
+        if (fightersRectangle != null) return;
         fightersRectangle = getUnitsSquare(streamVehicles(Ownership.ALLY, VehicleType.FIGHTER));
         helicoptersRectangle = getUnitsSquare(streamVehicles(Ownership.ALLY, VehicleType.HELICOPTER));
         ifvRectangle = getUnitsSquare(streamVehicles(Ownership.ALLY, VehicleType.IFV));
         tanksRectangle = getUnitsSquare(streamVehicles(Ownership.ALLY, VehicleType.TANK));
         arrvsRectangle = getUnitsSquare(streamVehicles(Ownership.ALLY, VehicleType.ARRV));
+
     }
 
     private Rectangle getUnitsSquare(Stream<Vehicle> vehicles) {
@@ -141,6 +144,7 @@ public final class ScaleStrategy implements Strategy {
 //        delayedMoves.add(move -> scaleVehicle(move, 0, 0, 4));
 //        delayedMoves.add(move -> selectAll(move, VehicleType.HELICOPTER));
 //        delayedMoves.add(move -> rotateVehicle(move, 0, centerY));
+
         delayedMoves.add(move -> selectRectangle(move, tanksRectangle));
         delayedMoves.add(move -> shiftVehicle(move, 0.0d, world.getHeight() / 2.0D));
 //        delayedMoves.add(move -> {            selectAll(move, VehicleType.ARRV);        });
@@ -249,6 +253,18 @@ public final class ScaleStrategy implements Strategy {
         this.scaleCenterY = world.getHeight() * 1.5d;
     }
 
+    private Point findEnemyVehicleFormation(VehicleType[] targetTypes) {
+        // ... получаем центр формации противника или центр мира ...
+        double targetX = Arrays.stream(targetTypes)
+                .flatMap(targetType -> streamVehicles(Ownership.ENEMY, targetType))
+                .mapToDouble(Vehicle::getX).average().orElse(centerX);
+
+        double targetY = Arrays.stream(targetTypes)
+                .flatMap(targetType -> streamVehicles(Ownership.ENEMY, targetType))
+                .mapToDouble(Vehicle::getY).average().orElse(Double.NaN);
+
+        return new Point(targetX, targetY);
+    }
 
     private Stream<Vehicle> streamVehicles(Ownership ownership, VehicleType vehicleType) {
         Stream<Vehicle> stream = vehicleById.values().stream();
@@ -288,7 +304,7 @@ public final class ScaleStrategy implements Strategy {
 
 }
 
-class Rectangle {
+class Rectangle implements Comparable<Rectangle> {
     double left, top, right, bottom;
     public static final Rectangle def = new Rectangle(Double.MAX_VALUE, Double.MAX_VALUE, Double.MIN_VALUE, Double.MIN_VALUE);
 
@@ -300,6 +316,22 @@ class Rectangle {
         this.top = top;
         this.right = right;
         this.bottom = bottom;
+    }
+
+    @Override
+    public String toString() {
+        return "Rectangle{" +
+                "left=" + left +
+                ", top=" + top +
+                ", right=" + right +
+                ", bottom=" + bottom +
+                '}';
+    }
+
+    @Override
+    public int compareTo(Rectangle that) {
+        if (right != that.right) return Double.compare(right, that.right);
+        return Double.compare(bottom, that.bottom);
     }
 }
 
