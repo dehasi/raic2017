@@ -1,6 +1,21 @@
-import model.*;
+import model.ActionType;
+import model.Game;
+import model.Move;
+import model.Player;
+import model.TerrainType;
+import model.Vehicle;
+import model.VehicleType;
+import model.VehicleUpdate;
+import model.WeatherType;
+import model.World;
 
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Random;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -49,10 +64,17 @@ public final class ScaleStrategy implements Strategy {
     private double scaleCenterX;
     private double scaleCenterY;
 
+
+    private Rectangle fightersRectangle;
+    private Rectangle helicoptersRectangle;
+    private Rectangle ifvRectangle;
+    private Rectangle tanksRectangle;
+    private Rectangle arrvsRectangle;
+
     private final Map<Long, Vehicle> vehicleById = new HashMap<>();
     private final Map<Long, Integer> updateTickByVehicleId = new HashMap<>();
     private final Queue<Consumer<Move>> delayedMoves = new ArrayDeque<>();
-    private final Map<Vehicle, Square> initialSquares = new HashMap<>();
+    private final Map<Vehicle, Rectangle> initialSquares = new HashMap<>();
 
     /**
      * Основной метод стратегии, осуществляющий управление армией. Вызывается каждый тик.
@@ -85,44 +107,42 @@ public final class ScaleStrategy implements Strategy {
     }
 
     private void findUnitsPosition(World world) {
-        world.getFacilities();
-        List<Point> fighterPoints = vehicleById.values().stream()
-                .filter(vehicle -> vehicle.getPlayerId() == me.getId())
-                .filter(vehicle -> vehicle.getType() == VehicleType.FIGHTER)
-                .map(v -> new Point(v.getX(), v.getY()))
-                .collect(toList());
-
-        Square fightersSquare = getUnitsSquare(fighterPoints);
-
+        fightersRectangle = getUnitsSquare(streamVehicles(Ownership.ALLY, VehicleType.FIGHTER));
+        helicoptersRectangle = getUnitsSquare(streamVehicles(Ownership.ALLY, VehicleType.HELICOPTER));
+        ifvRectangle = getUnitsSquare(streamVehicles(Ownership.ALLY, VehicleType.IFV));
+        tanksRectangle = getUnitsSquare(streamVehicles(Ownership.ALLY, VehicleType.TANK));
+        arrvsRectangle = getUnitsSquare(streamVehicles(Ownership.ALLY, VehicleType.ARRV));
     }
 
-    private Square getUnitsSquare(List<Point> points) {
-        Square square = new Square(Double.MAX_VALUE, Double.MAX_VALUE, Double.MIN_VALUE, Double.MIN_VALUE);
+    private Rectangle getUnitsSquare(Stream<Vehicle> vehicles) {
+        List<Point> points = vehicles.map(v -> new Point(v.getX(), v.getY()))
+                .collect(toList());
+        Rectangle rectangle = new Rectangle(Double.MAX_VALUE, Double.MAX_VALUE, Double.MIN_VALUE, Double.MIN_VALUE);
         for (Point p : points) {
-            if (p.x < square.topX) {
-                square.topX = p.x;
+            if (p.x < rectangle.left) {
+                rectangle.left = p.x;
             }
-            if (p.y < square.topY) {
-                square.topY = p.y;
+            if (p.y < rectangle.top) {
+                rectangle.top = p.y;
             }
 
-            if (p.x > square.bottomX) {
-                square.bottomX = p.x;
+            if (p.x > rectangle.right) {
+                rectangle.right = p.x;
             }
-            if (p.y > square.bottomY) {
-                square.bottomY = p.y;
+            if (p.y > rectangle.bottom) {
+                rectangle.bottom = p.y;
             }
         }
-        return square;
+        return rectangle;
     }
 
     private void move() {
-        delayedMoves.add(move -> selectAll(move, VehicleType.FIGHTER));
-        delayedMoves.add(move -> scaleVehicle(move, 0, 0, 4));
-        delayedMoves.add(move -> selectAll(move, VehicleType.HELICOPTER));
-        delayedMoves.add(move -> rotateVehicle(move, 0, centerY));
-//        delayedMoves.add(move -> {            selectAll(move, VehicleType.TANK);        });
-//        delayedMoves.add(move -> {            shiftVehicle(move, 0.0d, world.getHeight() / 2.0D);        });
+//        delayedMoves.add(move -> selectAll(move, VehicleType.FIGHTER));
+//        delayedMoves.add(move -> scaleVehicle(move, 0, 0, 4));
+//        delayedMoves.add(move -> selectAll(move, VehicleType.HELICOPTER));
+//        delayedMoves.add(move -> rotateVehicle(move, 0, centerY));
+        delayedMoves.add(move -> selectRectangle(move, tanksRectangle));
+        delayedMoves.add(move -> shiftVehicle(move, 0.0d, world.getHeight() / 2.0D));
 //        delayedMoves.add(move -> {            selectAll(move, VehicleType.ARRV);        });
 //        delayedMoves.add(move -> {            shiftVehicle(move, 0.0d, world.getHeight() / 2.0D);        });
 //        delayedMoves.add(move -> {            selectAll(move, VehicleType.IFV);        });
@@ -150,11 +170,21 @@ public final class ScaleStrategy implements Strategy {
         move.setY(y);
     }
 
+
     private void selectAll(Move move, VehicleType vehicleType) {
         move.setAction(ActionType.CLEAR_AND_SELECT);
         move.setVehicleType(vehicleType);
         move.setRight(world.getWidth());
         move.setBottom(world.getHeight());
+    }
+
+
+    private void selectRectangle(Move move, Rectangle rectangle) {
+        move.setAction(ActionType.CLEAR_AND_SELECT);
+        move.setLeft(rectangle.left);
+        move.setTop(rectangle.top);
+        move.setRight(rectangle.right);
+        move.setBottom(rectangle.bottom);
     }
 
     private boolean executeDelayedMove() {
@@ -258,18 +288,18 @@ public final class ScaleStrategy implements Strategy {
 
 }
 
-class Square {
-    double topX, topY, bottomX, bottomY;
-    public static final Square def = new Square(Double.MAX_VALUE, Double.MAX_VALUE, Double.MIN_VALUE, Double.MIN_VALUE);
+class Rectangle {
+    double left, top, right, bottom;
+    public static final Rectangle def = new Rectangle(Double.MAX_VALUE, Double.MAX_VALUE, Double.MIN_VALUE, Double.MIN_VALUE);
 
-    public Square() {
+    public Rectangle() {
     }
 
-    public Square(double topX, double topY, double bottomX, double bottomY) {
-        this.topX = topX;
-        this.topY = topY;
-        this.bottomX = bottomX;
-        this.bottomY = bottomY;
+    public Rectangle(double left, double top, double right, double bottom) {
+        this.left = left;
+        this.top = top;
+        this.right = right;
+        this.bottom = bottom;
     }
 }
 
