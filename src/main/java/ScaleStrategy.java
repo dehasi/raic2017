@@ -9,12 +9,13 @@ import model.VehicleUpdate;
 import model.WeatherType;
 import model.World;
 
-import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Random;
 import java.util.function.Consumer;
@@ -72,10 +73,15 @@ public final class ScaleStrategy implements Strategy {
     private Rectangle tanksRectangle;
     private Rectangle arrvsRectangle;
 
+    private boolean attactIsStarted = false;
+
     private final Map<Long, Vehicle> vehicleById = new HashMap<>();
     private final Map<Long, Integer> updateTickByVehicleId = new HashMap<>();
-    private final Queue<Consumer<Move>> delayedMoves = new ArrayDeque<>();
+    private final Queue<PriorityMove> delayedMoves = new PriorityQueue<>(PriorityMove::compareTo);
     private final Map<Vehicle, Rectangle> initialSquares = new HashMap<>();
+
+    private final MoveHelper moveHelper = new MoveHelper();
+    private final RectangleHelper rectangleHelper = new RectangleHelper();
 
     /**
      * Основной метод стратегии, осуществляющий управление армией. Вызывается каждый тик.
@@ -90,7 +96,7 @@ public final class ScaleStrategy implements Strategy {
         initializeStrategy(world, game);
         initializeTick(me, world, game, move);
         findUnitsPosition(world);
-        startAttack();
+
         if (world.getTickIndex() == 0) {
             move();
             return;
@@ -110,11 +116,35 @@ public final class ScaleStrategy implements Strategy {
     private void startAttack() {
         List<Rectangle> rectangles = Stream.of(fightersRectangle, helicoptersRectangle, ifvRectangle, tanksRectangle, arrvsRectangle).sorted(Rectangle::compareTo).collect(toList());
 
+        final List<Rectangle> frontAttack = new ArrayList<>(5);
+        final List<Rectangle> backAttack = new ArrayList<>(5);
         for (Rectangle rec : rectangles) {
             switch (rec.type) {
                 case FIGHTER:
+                    frontAttack.add(fightersRectangle);
+                    continue;
+                case ARRV:
+                case IFV:
+                    frontAttack.add(rectangleHelper.verticalSplitLeft(rec));
+                    backAttack.add(rectangleHelper.verticalSplitRight(rec));
+                    continue;
+                case HELICOPTER:
+                case TANK:
+                    backAttack.add(rec);
+                    continue;
             }
         }
+
+        for (Rectangle rectangle : frontAttack) {
+            delayedMoves.add(new PriorityMove(0, m -> moveHelper.selectRectangle(m, rectangle)));
+            delayedMoves.add(new PriorityMove(0, m -> moveHelper.shiftVehicle(m, oneThirdX, oneThirdY)));
+        }
+//
+        for (Rectangle rectangle : backAttack) {
+            delayedMoves.add(new PriorityMove(0, m -> moveHelper.selectRectangle(m, rectangle)));
+            delayedMoves.add(new PriorityMove(0, m -> moveHelper.rotateVehicle(m, 0, world.getHeight())));
+        }
+
 
     }
 
@@ -125,6 +155,7 @@ public final class ScaleStrategy implements Strategy {
         ifvRectangle = getUnitsSquare(streamVehicles(Ownership.ALLY, VehicleType.IFV));
         tanksRectangle = getUnitsSquare(streamVehicles(Ownership.ALLY, VehicleType.TANK));
         arrvsRectangle = getUnitsSquare(streamVehicles(Ownership.ALLY, VehicleType.ARRV));
+        startAttack();
 
     }
 
@@ -160,54 +191,16 @@ public final class ScaleStrategy implements Strategy {
 //        delayedMoves.add(move -> selectAll(move, VehicleType.HELICOPTER));
 //        delayedMoves.add(move -> rotateVehicle(move, 0, centerY));
 
-        delayedMoves.add(move -> {
-            selectAll(move, VehicleType.ARRV);
-        });
-//        delayedMoves.add(move -> {            shiftVehicle(move, 0.0d, world.getHeight() / 2.0D);        });
+
 //        delayedMoves.add(move -> {            selectAll(move, VehicleType.IFV);        });
 //        delayedMoves.add(move -> {            shiftVehicle(move, world.getWidth() / 2.0D, .0D);        });
 //        delayedMoves.add(move -> {        });
     }
 
-    private void rotateVehicle(Move move, double x, double y) {
-        move.setAction(ActionType.ROTATE);
-        move.setX(x);
-        move.setY(y);
-        move.setAngle(Math.PI);
-    }
-
-    private void scaleVehicle(Move move, double x, double y, double factor) {
-        move.setAction(ActionType.SCALE);
-        move.setX(x);
-        move.setY(y);
-        move.setFactor(factor);
-    }
-
-    private void shiftVehicle(Move move, double x, double y) {
-        move.setAction(ActionType.MOVE);
-        move.setX(x);
-        move.setY(y);
-    }
-
-
-    private void selectAll(Move move, VehicleType vehicleType) {
-        move.setAction(ActionType.CLEAR_AND_SELECT);
-        move.setVehicleType(vehicleType);
-        move.setRight(world.getWidth());
-        move.setBottom(world.getHeight());
-    }
-
-
-    private void selectRectangle(Move move, Rectangle rectangle) {
-        move.setAction(ActionType.CLEAR_AND_SELECT);
-        move.setLeft(rectangle.left);
-        move.setTop(rectangle.top);
-        move.setRight(rectangle.right);
-        move.setBottom(rectangle.bottom);
-    }
 
     private boolean executeDelayedMove() {
-        Consumer<Move> action = delayedMoves.poll();
+        if (delayedMoves.isEmpty()) return false;
+        Consumer<Move> action = delayedMoves.poll().consumer;
         if (action == null) return false;
 
         action.accept(move);
@@ -319,13 +312,10 @@ public final class ScaleStrategy implements Strategy {
 
 }
 
+/***********  my domain classes ********************/
 class Rectangle implements Comparable<Rectangle> {
     VehicleType type;
     double left, top, right, bottom;
-    public static final Rectangle def = new Rectangle(Double.MAX_VALUE, Double.MAX_VALUE, Double.MIN_VALUE, Double.MIN_VALUE);
-
-    public Rectangle() {
-    }
 
     public Rectangle(double left, double top, double right, double bottom) {
         this.left = left;
@@ -355,11 +345,86 @@ class Rectangle implements Comparable<Rectangle> {
 class Point {
     double x, y;
 
-    public Point() {
-    }
-
     public Point(double x, double y) {
         this.x = x;
         this.y = y;
     }
+}
+
+class PriorityMove implements Comparable<PriorityMove> {
+    int priority;
+    Consumer<Move> consumer;
+
+    public PriorityMove(int priority, Consumer<Move> consumer) {
+        this.consumer = consumer;
+        this.priority = priority;
+    }
+
+    @Override
+    public int compareTo(PriorityMove o) {
+        return Integer.compare(priority, o.priority);
+    }
+}
+
+final class RectangleHelper {
+    Rectangle verticalSplitLeft(Rectangle r) {
+        Rectangle rectangle = new Rectangle(r.left, r.top, r.right / 2.0d, r.bottom);
+        rectangle.type = r.type;
+        return rectangle;
+    }
+
+    Rectangle verticalSplitRight(Rectangle r) {
+        Rectangle rectangle = new Rectangle(r.left + (r.right - r.left) / 2.0d, r.top, r.right, r.bottom);
+        rectangle.type = r.type;
+        return rectangle;
+    }
+
+}
+
+final class MoveHelper {
+    void rotateVehicle(Move move, double x, double y) {
+        move.setAction(ActionType.ROTATE);
+        move.setX(x);
+        move.setY(y);
+        move.setAngle(Math.PI/2.0D);
+    }
+
+    void scaleVehicle(Move move, double x, double y, double factor) {
+        move.setAction(ActionType.SCALE);
+        move.setX(x);
+        move.setY(y);
+        move.setFactor(factor);
+    }
+
+    void shiftVehicle(Move move, double x, double y) {
+        move.setAction(ActionType.MOVE);
+        move.setX(x);
+        move.setY(y);
+    }
+
+
+    void selectAll(World world, Move move, VehicleType vehicleType) {
+        move.setAction(ActionType.CLEAR_AND_SELECT);
+        move.setVehicleType(vehicleType);
+        move.setRight(world.getWidth());
+        move.setBottom(world.getHeight());
+    }
+
+    void clearAndSelectRectangle(Move move, Rectangle rectangle) {
+        move.setAction(ActionType.CLEAR_AND_SELECT);
+        move.setLeft(rectangle.left);
+        move.setTop(rectangle.top);
+        move.setRight(rectangle.right);
+        move.setBottom(rectangle.bottom);
+    }
+
+    void selectRectangle(Move move, Rectangle rectangle) {
+        move.setAction(ActionType.ADD_TO_SELECTION);
+        move.setLeft(rectangle.left);
+        move.setTop(rectangle.top);
+        move.setRight(rectangle.right);
+        move.setBottom(rectangle.bottom);
+
+    }
+
 }
