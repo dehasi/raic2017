@@ -10,6 +10,7 @@ import model.WeatherType;
 import model.World;
 
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
@@ -28,8 +29,6 @@ public final class ScaleStrategy implements Strategy {
      * Список целей для каждого типа техники, упорядоченных по убыванию урона по ним.
      */
     private static final Map<VehicleType, VehicleType[]> preferredTargetTypesByVehicleType;
-    private static final int FRONT = 1;
-    private static final int BACK = 2;
 
     static {
         preferredTargetTypesByVehicleType = new EnumMap<>(VehicleType.class);
@@ -115,25 +114,40 @@ public final class ScaleStrategy implements Strategy {
     }
 
     private void startAttack() {
+
+
 //front
         delayedMoves.add(new PriorityMove(m -> moveHelper.clearAndSelectRectangle(m, fightersRectangle)));
         delayedMoves.add(new PriorityMove(m -> moveHelper.selectRectangle(m, rectangleHelper.verticalSplitLeft(arrvsRectangle))));
         delayedMoves.add(new PriorityMove(m -> moveHelper.selectRectangle(m, rectangleHelper.verticalSplitLeft(ifvRectangle))));
-        delayedMoves.add(new PriorityMove(m -> moveHelper.creteGroup(m, FRONT)));
+        delayedMoves.add(new PriorityMove(m -> moveHelper.creteGroup(m, Groups.FRONT.i)));
 
-        delayedMoves.add(new PriorityMove(m -> moveHelper.selectGroup(m, FRONT)));
-        delayedMoves.add(new PriorityMove(m -> moveHelper.shiftVehicle(m, oneThirdX, oneThirdY)));
 
 //back
         delayedMoves.add(new PriorityMove(m -> moveHelper.clearAndSelectRectangle(m, tanksRectangle)));
         delayedMoves.add(new PriorityMove(m -> moveHelper.selectRectangle(m, helicoptersRectangle)));
         delayedMoves.add(new PriorityMove(m -> moveHelper.selectRectangle(m, rectangleHelper.verticalSplitRight(arrvsRectangle))));
         delayedMoves.add(new PriorityMove(m -> moveHelper.selectRectangle(m, rectangleHelper.verticalSplitRight(ifvRectangle))));
-        delayedMoves.add(new PriorityMove(m -> moveHelper.creteGroup(m, BACK)));
+        delayedMoves.add(new PriorityMove(m -> moveHelper.creteGroup(m, Groups.BACK.i)));
 
-        delayedMoves.add(new PriorityMove(m -> moveHelper.selectGroup(m, BACK)));
+
+        List<Rectangle> rectangles = Stream.of(fightersRectangle, helicoptersRectangle, ifvRectangle, tanksRectangle, arrvsRectangle).sorted(Comparator.reverseOrder()).collect(toList());
+
+        for (Rectangle rectangle : rectangles) {
+
+            delayedMoves.add(new PriorityMove(m -> moveHelper.clearAndSelectRectangle(m, rectangleHelper.verticalSplitLeft(rectangle))));
+            delayedMoves.add(new PriorityMove(m -> moveHelper.creteGroup(m, Groups.getLeftFor(rectangle.type).i)));
+            delayedMoves.add(new PriorityMove(m -> moveHelper.rotateVehicle(m, 0, 1.10D * centerY, Math.PI / 4.0D)));
+            delayedMoves.add(new PriorityMove(m -> moveHelper.clearAndSelectRectangle(m, rectangleHelper.verticalSplitRight(rectangle))));
+            delayedMoves.add(new PriorityMove(m -> moveHelper.creteGroup(m, Groups.getRightFor(rectangle.type).i)));
+            delayedMoves.add(new PriorityMove(m -> moveHelper.rotateVehicle(m, 0, 1.10D * centerY, Math.PI / 4.0D)));
+        }
+
+        delayedMoves.add(new PriorityMove(m -> moveHelper.selectGroup(m, Groups.BACK.i)));
         delayedMoves.add(new PriorityMove(m -> moveHelper.rotateVehicle(m, 0, 1.10D * centerY, Math.PI / 2.0D)));
 
+        delayedMoves.add(new PriorityMove(m -> moveHelper.selectGroup(m, Groups.FRONT.i)));
+        delayedMoves.add(new PriorityMove(m -> moveHelper.shiftVehicle(m, oneThirdX, oneThirdY)));
 
     }
 
@@ -294,6 +308,53 @@ public final class ScaleStrategy implements Strategy {
         ENEMY
     }
 
+
+    enum Groups {
+        FRONT(1), BACK(2), LEFT_TANK(3), LEFT_FIGHTER(4), LEFT_HELICOPTER(5), LEFT_ARRV(6), LEFT_IFV(7),
+        RIGHT_TANK(8), RIGHT_FIGHTER(9), RIGHT_HELICOPTER(10), RIGHT_ARRV(11), RIGHT_IFV(12);
+
+
+        public final int i;
+
+        Groups(int i) {
+            this.i = i;
+        }
+
+        static Groups getLeftFor(VehicleType type) {
+            switch (type) {
+                case TANK:
+                    return LEFT_TANK;
+                case HELICOPTER:
+                    return LEFT_HELICOPTER;
+                case IFV:
+                    return LEFT_IFV;
+                case ARRV:
+                    return LEFT_ARRV;
+                case FIGHTER:
+                    return LEFT_FIGHTER;
+                default:
+                    return null;
+            }
+        }
+
+        static Groups getRightFor(VehicleType type) {
+            switch (type) {
+                case TANK:
+                    return RIGHT_TANK;
+                case HELICOPTER:
+                    return RIGHT_HELICOPTER;
+                case IFV:
+                    return RIGHT_IFV;
+                case ARRV:
+                    return RIGHT_ARRV;
+                case FIGHTER:
+                    return RIGHT_FIGHTER;
+                default:
+                    return null;
+            }
+        }
+    }
+
 }
 
 /***********  my domain classes ********************/
@@ -322,7 +383,7 @@ class Rectangle implements Comparable<Rectangle> {
     @Override
     public int compareTo(Rectangle that) {
         if (right != that.right) return Double.compare(right, that.right);
-        return Double.compare(bottom, that.bottom);
+        return -1*Double.compare(bottom, that.bottom);
     }
 }
 
@@ -344,7 +405,7 @@ class PriorityMove implements Comparable<PriorityMove> {
         this.priority = priority;
     }
 
-    public PriorityMove(Consumer<Move> consumer) {
+    PriorityMove(Consumer<Move> consumer) {
         this.consumer = consumer;
     }
 
@@ -367,6 +428,55 @@ final class RectangleHelper {
         return rectangle;
     }
 
+
+    Rectangle[][] initialPositionMatrix(List<Rectangle> rectangles) {
+        Rectangle[][] matrix = new Rectangle[4][4];
+        for (Rectangle rectangle : rectangles) {
+            int x = calculateX(rectangle);
+            int y = calculateY(rectangle);
+            matrix[y][x] = rectangle;
+        }
+        return matrix;
+    }
+
+    private double step = 20.0d;
+    private double width = 54.0d;
+
+    private int calculateY(Rectangle rectangle) {
+        if (rectangle.top < step) return 0;
+        if (rectangle.top < step + width + step) return 1;
+        if (rectangle.top < 2 * (width + step) + step) return 2;
+        return 3;
+    }
+
+    private int calculateX(Rectangle rectangle) {
+        if (rectangle.left < step) return 0;
+        if (rectangle.left < width + step + step) return 1;
+        if (rectangle.left < 2 * (width + step) + step) return 2;
+        return 3;
+    }
+
+
+    void shiftRectangle(int x, int y, Rectangle[][] matrix) {
+        if (matrix[x][y] == null) return;
+
+        if (matrix[x][y].type == VehicleType.FIGHTER || matrix[x][y].type == VehicleType.HELICOPTER) {
+            //rearrange air force
+        }
+
+        if (matrix[x][y].type == VehicleType.TANK) {
+            //move tank
+        }
+
+
+    }
+
+    boolean isCellFree(int x, int y, Rectangle[][] matrix) {
+        if (x < 0 || y < 0) return false;
+        if (x >= matrix.length || x >= matrix.length) return false;
+        return matrix[x][y] == null;
+
+    }
 }
 
 final class MoveHelper {
